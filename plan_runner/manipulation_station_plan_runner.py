@@ -6,6 +6,7 @@ from pydrake.all import (
     LeafSystem,
     PortDataType,
 )
+
 from pydrake.trajectories import (
     PiecewisePolynomial
 )
@@ -34,33 +35,35 @@ class ManipStationPlanRunner(LeafSystem):
     def __init__(self, station, kuka_plans, gripper_setpoint_list,
                  control_period=0.005, print_period=0.5):
         LeafSystem.__init__(self)
-        self.set_name("Manipulation Plan Runner")
-        # Append plan_list with a plan that moves the robot from its current position to
-        # plan_list[0].traj.value(0)
-        kuka_plans.insert(0, JointSpacePlan())
-        gripper_setpoint_list.insert(0, 0.055)
-        self.move_to_home_duration_sec = 6.0
-        kuka_plans[0].duration = self.move_to_home_duration_sec
-
-        # Add a five-second zero order hold to hold the current position of the robot
-        kuka_plans.insert(0, JointSpacePlan())
-        gripper_setpoint_list.insert(0, 0.055)
-        self.zero_order_hold_duration_sec = 3.0
-        kuka_plans[0].duration = self.zero_order_hold_duration_sec
-
         assert len(kuka_plans) == len(gripper_setpoint_list)
+        self.set_name("Manipulation Plan Runner")
+
+        # Insert to the beginning of plan_list a plan that moves the robot from its
+        # current position to plan_list[0].traj.value(0)
+        kuka_plans.insert(0, JointSpacePlanGoToTarget(
+            duration=6.0, q_target=kuka_plans[0].traj.value(0).flatten()))
+        gripper_setpoint_list.insert(0, 0.055)
+
+        # Add a zero order hold to hold the current position of the robot
+        kuka_plans.insert(0, JointSpacePlanRelative(
+            duration=3.0, delta_q=np.zeros(7)))
+        gripper_setpoint_list.insert(0, 0.055)
+
         self.gripper_setpoint_list = gripper_setpoint_list
         self.kuka_plans_list = kuka_plans
+
+        # set current plan
+        self.current_plan_idx = 0
+        self.current_plan = self.kuka_plans_list[0]
+        self.current_plan.set_start_time(0.)
 
         # calculate starting time for all plans
         self.num_plans = len(kuka_plans)
         self.t_plan = np.zeros(self.num_plans + 1)
-        self.t_plan[1] = self.zero_order_hold_duration_sec
-        self.t_plan[2] = self.move_to_home_duration_sec + self.t_plan[1]
-        for i in range(2, self.num_plans):
+        for i in range(0, self.num_plans):
             self.t_plan[i + 1] = \
                 self.t_plan[i] + kuka_plans[i].get_duration() * 1.1
-        print "Plan starting time\n", self.t_plan
+        print "Plan starting times\n", self.t_plan
 
         # Stuff for iiwa control
         self.nu = 7
@@ -121,7 +124,7 @@ class ManipStationPlanRunner(LeafSystem):
             new_position_command[:] = self.current_plan.traj.value(t_plan).flatten()
 
         elif self.current_plan.type == PlanTypes["JointSpacePlanRelative"] or \
-            self.current_plan.type == PlanTypes["JointSpacePlanGoToTarget"]:
+                self.current_plan.type == PlanTypes["JointSpacePlanGoToTarget"]:
             if self.current_plan.traj is None:
                 self.current_plan.UpdateTrajectory(q_start=q_iiwa)
             new_position_command[:] = self.current_plan.traj.value(t_plan).flatten()
@@ -180,38 +183,8 @@ class ManipStationPlanRunner(LeafSystem):
             print "t: ", context.get_time()
             self.last_print_time = context.get_time()
 
-
     def GetCurrentPlan(self, context):
         t = context.get_time()
-        if self.kuka_plans_list[0].traj is None:
-            q_current = self.EvalVectorInput(
-                context, self.iiwa_position_input_port.get_index()).get_value()
-            q0 = self.kuka_plans_list[2].traj.value(0).flatten()
-
-            # zero order hold
-            q_knots_kuka = np.zeros((2,7))
-            q_knots_kuka[0] = q_current
-            qtraj = PiecewisePolynomial.ZeroOrderHold(
-                [0, self.zero_order_hold_duration_sec], q_knots_kuka.T)
-            self.kuka_plans_list[0] = JointSpacePlan(qtraj)
-
-            # move to the starting position of trajectory plans
-            t_knots = np.array(
-                [0., self.move_to_home_duration_sec / 2, self.move_to_home_duration_sec])
-            q_knots_kuka = np.zeros((3, 7))
-            q_knots_kuka[0] = q_current
-            q_knots_kuka[2] = q0
-            q_knots_kuka[1] = (q_knots_kuka[0] + q_knots_kuka[2]) / 2
-            qtraj = PiecewisePolynomial.Cubic(
-                t_knots, q_knots_kuka.T, np.zeros(7), np.zeros(7))
-
-            self.kuka_plans_list[1] = JointSpacePlan(qtraj)
-
-            # set current plan
-            self.current_plan_idx = 0
-            self.current_plan = self.kuka_plans_list[0]
-            self.current_plan.set_start_time(0.)
-
         new_plan_idx = 0
         for i in range(self.num_plans):
             if t >= self.t_plan[i] and t < self.t_plan[i + 1]:
@@ -221,7 +194,6 @@ class ManipStationPlanRunner(LeafSystem):
             self.current_plan_idx = new_plan_idx
             self.current_plan = self.kuka_plans_list[new_plan_idx]
             self.current_plan.set_start_time(t)
-
 
     def _DoCalcDiscreteVariableUpdates(self, context, events, discrete_state):
         # Call base method to ensure we do not get recursion.
