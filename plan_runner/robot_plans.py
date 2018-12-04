@@ -23,7 +23,6 @@ for plan_types_string in plan_type_strings:
     PlanTypes[plan_types_string] = hashlib.sha1(plan_types_string).hexdigest()
 
 
-
 class PlanBase:
     def __init__(self,
                  type = None,
@@ -36,13 +35,8 @@ class PlanBase:
             self.traj_d = trajectory.derivative(1)
             self.duration = trajectory.end_time()
 
-        self.start_time = None
-
     def get_duration(self):
         return self.duration
-
-    def set_start_time(self, time):
-        self.start_time = time
 
 
 class JointSpacePlan(PlanBase):
