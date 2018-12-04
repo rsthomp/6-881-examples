@@ -15,7 +15,7 @@ from plan_runner.manipulation_station_plan_runner import ManipStationPlanRunner
 from pydrake.systems.primitives import Demultiplexer, LogOutput
 
 X_WObject_default = Isometry3.Identity()
-X_WObject_default.set_translation([.6, 0, 0])
+X_WObject_default.set_translation([.6, .1, 0])
 
 def RenderSystemWithGraphviz(system, output_file="system_view.gz"):
     """ Renders the Drake system (presumably a diagram,
@@ -93,6 +93,9 @@ class ManipulationStationSimulator:
                         plan_runner.iiwa_position_input_port)
         builder.Connect(self.station.GetOutputPort("iiwa_velocity_estimated"),
                         plan_runner.iiwa_velocity_input_port)
+        builder.Connect(self.station.GetOutputPort("wsg_force_measured"),
+                        plan_runner.wsg_force_input_port)
+
 
         # Add meshcat visualizer
         if is_visualizing:
@@ -215,6 +218,8 @@ class ManipulationStationSimulator:
                         plan_runner.iiwa_position_input_port)
         builder.Connect(station_hardware.GetOutputPort("iiwa_velocity_estimated"),
                         plan_runner.iiwa_velocity_input_port)
+        builder.Connect(self.station.GetOutputPort("wsg_force_measured"), 
+                        plan_runner.wsg_force_input_port);
 
 
         # Add logger

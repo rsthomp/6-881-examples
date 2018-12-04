@@ -88,12 +88,20 @@ class ManipStationPlanRunner(LeafSystem):
             self._DeclareInputPort(
                 "iiwa_velocity", PortDataType.kVectorValued, 7)
 
+        # 
+        self.wsg_force_input_port = \
+            self._DeclareInputPort(
+                "wsg_force_measured", PortDataType.kVectorValued, 1)
+        
+
         # position and torque command output port
         # first 7 elements are position commands.
         # last 7 elements are torque commands.
         self.iiwa_position_command_output_port = \
             self._DeclareVectorOutputPort("iiwa_position_and_torque_command",
                 BasicVector(self.nu*2), self.CalcIiwaCommand)
+
+
 
         # gripper control
         self._DeclareDiscreteState(1)
@@ -106,11 +114,13 @@ class ManipStationPlanRunner(LeafSystem):
                 "force_limit", BasicVector(1), self.CalcForceLimitOutput)
 
 
+
     def CalcIiwaCommand(self, context, y_data):
         t= context.get_time()
         self.GetCurrentPlan(context)
         q_iiwa = self.EvalVectorInput(
             context, self.iiwa_position_input_port.get_index()).get_value()
+        print(self.EvalVectorInput(context, self.wsg_force_input_port.get_index()))#.get_value())
 
         t_plan = t - self.current_plan.start_time
         new_position_command = np.zeros(7)
