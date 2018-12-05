@@ -88,20 +88,17 @@ class ManipStationPlanRunner(LeafSystem):
             self._DeclareInputPort(
                 "iiwa_velocity", PortDataType.kVectorValued, 7)
 
-        # 
+        #gripper measured force input port
         self.wsg_force_input_port = \
             self._DeclareInputPort(
                 "wsg_force_measured", PortDataType.kVectorValued, 1)
         
-
         # position and torque command output port
         # first 7 elements are position commands.
         # last 7 elements are torque commands.
         self.iiwa_position_command_output_port = \
             self._DeclareVectorOutputPort("iiwa_position_and_torque_command",
                 BasicVector(self.nu*2), self.CalcIiwaCommand)
-
-
 
         # gripper control
         self._DeclareDiscreteState(1)
@@ -113,15 +110,16 @@ class ManipStationPlanRunner(LeafSystem):
             self._DeclareVectorOutputPort(
                 "force_limit", BasicVector(1), self.CalcForceLimitOutput)
 
-
+    def _DoHasDirectFeedthrough(self, input_port, output_port):
+        return False
 
     def CalcIiwaCommand(self, context, y_data):
         t= context.get_time()
         self.GetCurrentPlan(context)
         q_iiwa = self.EvalVectorInput(
             context, self.iiwa_position_input_port.get_index()).get_value()
-        print(self.EvalVectorInput(context, self.wsg_force_input_port.get_index()))#.get_value())
-
+       
+        force = self.EvalVectorInput(context, self.wsg_force_input_port.get_index()).get_value()
         t_plan = t - self.current_plan.start_time
         new_position_command = np.zeros(7)
         new_position_command[:] = q_iiwa
@@ -135,6 +133,41 @@ class ManipStationPlanRunner(LeafSystem):
             if self.current_plan.traj is None:
                 self.current_plan.UpdateTrajectory(q_start=q_iiwa)
             new_position_command[:] = self.current_plan.traj.value(t_plan).flatten()
+
+        #For moving the EE to an object to grasp
+        elif self.current_plan.type == PlanTypes["GrabObjectPositionPlan"]:
+
+            x_iiwa_mutable = \
+                self.tree_iiwa.GetMutablePositionsAndVelocities(self.context_iiwa)
+            x_iiwa_mutable[:7] = q_iiwa
+
+            #Get position relative to reference frame
+            Jv_WL7q, p_HrQ, p_HrR, p_HrL = self.current_plan.CalcKinematics(
+                l7_frame=self.l7_frame,
+                world_frame=self.plant_iiwa.world_frame(),
+                tree_iiwa=self.tree_iiwa, context_iiwa=self.context_iiwa,
+                t_plan=t_plan)
+
+            new_position_command[:] = self.current_plan.CalcPositionCommand(
+                    t_plan, q_iiwa, Jv_WL7q, p_HrQ, p_HrR, p_HrL, self.control_period)
+            new_torque_command[:] = self.current_plan.CalcTorqueCommand()
+
+        #For grabbing objects
+        elif self.current_plan.type == PlanTypes["GraspObjectCompliancePlan"]:
+            x_iiwa_mutable = \
+                self.tree_iiwa.GetMutablePositionsAndVelocities(self.context_iiwa)
+            x_iiwa_mutable[:7] = q_iiwa
+
+            #Get position relative to reference frame
+            Jv_WL7q, p_HrQ, p_HrR, p_HrL = self.current_plan.CalcKinematics(
+                l7_frame=self.l7_frame,
+                world_frame=self.plant_iiwa.world_frame(),
+                tree_iiwa=self.tree_iiwa, context_iiwa=self.context_iiwa,
+                t_plan=t_plan)
+
+            new_position_command[:] = self.current_plan.CalcPositionCommand(
+                    t_plan, q_iiwa, Jv_WL7q, p_HrQ, p_HrR, p_HrL, self.control_period)
+            new_torque_command[:] = self.current_plan.CalcTorqueCommand()
 
         elif self.current_plan.type == PlanTypes["IiwaTaskSpacePlan"]:
             if self.current_plan.xyz_offset is None:
@@ -196,7 +229,7 @@ class ManipStationPlanRunner(LeafSystem):
         if self.kuka_plans_list[0].traj is None:
             q_current = self.EvalVectorInput(
                 context, self.iiwa_position_input_port.get_index()).get_value()
-            q0 = self.kuka_plans_list[2].traj.value(0).flatten()
+            q0 = [0, 0, 0, -1.75, 0, 1.0, 0]#q0 = self.kuka_plans_list[2].traj.value(0).flatten()
 
             # zero order hold
             q_knots_kuka = np.zeros((2,7))

@@ -16,6 +16,8 @@ plan_type_strings = [
     "OpenLeftDoorPositionPlan",
     "OpenLeftDoorImpedancePlan",
     "JointSpacePlanGoToTarget",
+    "GrabObjectPositionPlan",
+    "GraspObjectCompliancePlan"
 ]
 
 PlanTypes = dict()
