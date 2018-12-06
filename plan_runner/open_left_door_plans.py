@@ -99,7 +99,7 @@ class OpenLeftDoorPositionPlan(OpenLeftDoorPlan):
             angle_start=angle_start,
             angle_end=angle_end,
             duration=duration,
-            type=PlanTypes["OpenLeftDoorPositionPlan"])
+            type=PlanTypes["OpenLeftDoorCompliancePlan"])
         self.q_iiwa_previous = np.zeros(7)
 
     def CalcPositionCommand(self, t_plan, q_iiwa, Jv_WL7q, p_HrQ, Q_L7L7r, Q_WL7, control_period):

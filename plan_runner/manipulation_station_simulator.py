@@ -15,7 +15,7 @@ from plan_runner.manipulation_station_plan_runner import ManipStationPlanRunner
 from pydrake.systems.primitives import Demultiplexer, LogOutput
 
 X_WObject_default = Isometry3.Identity()
-X_WObject_default.set_translation([.6, .1, 0])
+X_WObject_default.set_translation([.6, .1, 0.03])
 
 def RenderSystemWithGraphviz(system, output_file="system_view.gz"):
     """ Renders the Drake system (presumably a diagram,

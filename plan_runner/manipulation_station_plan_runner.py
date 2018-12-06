@@ -58,6 +58,7 @@ class ManipStationPlanRunner(LeafSystem):
         self.t_plan[1] = self.zero_order_hold_duration_sec
         self.t_plan[2] = self.move_to_home_duration_sec + self.t_plan[1]
         for i in range(2, self.num_plans):
+
             self.t_plan[i + 1] = \
                 self.t_plan[i] + kuka_plans[i].get_duration() * 1.1
         print "Plan starting time\n", self.t_plan
@@ -110,6 +111,8 @@ class ManipStationPlanRunner(LeafSystem):
             self._DeclareVectorOutputPort(
                 "force_limit", BasicVector(1), self.CalcForceLimitOutput)
 
+        self.gripper_pos = .055
+
     def _DoHasDirectFeedthrough(self, input_port, output_port):
         return False
 
@@ -154,6 +157,23 @@ class ManipStationPlanRunner(LeafSystem):
 
         #For grabbing objects
         elif self.current_plan.type == PlanTypes["GraspObjectCompliancePlan"]:
+
+            x_iiwa_mutable = \
+                self.tree_iiwa.GetMutablePositionsAndVelocities(self.context_iiwa)
+            x_iiwa_mutable[:7] = q_iiwa
+
+            #Get position relative to reference frame
+            Jv_WL7q, p_HrQ, p_HrR, p_HrL = self.current_plan.CalcKinematics(
+                l7_frame=self.l7_frame,
+                world_frame=self.plant_iiwa.world_frame(),
+                tree_iiwa=self.tree_iiwa, context_iiwa=self.context_iiwa,
+                t_plan=t_plan)
+
+            new_position_command[:], self.gripper_pos = self.current_plan.CalcPositionCommand(
+                    t_plan, q_iiwa, Jv_WL7q, p_HrQ, p_HrR, p_HrL, self.control_period, force)
+            new_torque_command[:] = self.current_plan.CalcTorqueCommand()
+
+        elif self.current_plan.type == PlanTypes["OpenLeftDoorCompliancePlan"]:
             x_iiwa_mutable = \
                 self.tree_iiwa.GetMutablePositionsAndVelocities(self.context_iiwa)
             x_iiwa_mutable[:7] = q_iiwa
@@ -166,8 +186,9 @@ class ManipStationPlanRunner(LeafSystem):
                 t_plan=t_plan)
 
             new_position_command[:] = self.current_plan.CalcPositionCommand(
-                    t_plan, q_iiwa, Jv_WL7q, p_HrQ, p_HrR, p_HrL, self.control_period)
+                    t_plan, q_iiwa, Jv_WL7q, p_HrQ, p_HrR, p_HrL, self.control_period, force)
             new_torque_command[:] = self.current_plan.CalcTorqueCommand()
+
 
         elif self.current_plan.type == PlanTypes["IiwaTaskSpacePlan"]:
             if self.current_plan.xyz_offset is None:
@@ -276,9 +297,11 @@ class ManipStationPlanRunner(LeafSystem):
 
     def CalcHandSetpointOutput(self, context, y_data):
         state = context.get_discrete_state_vector().get_value()
+
         y = y_data.get_mutable_value()
+
         # Get the ith finger control output
-        y[:] = state[0]
+        y[:] = self.gripper_pos#state[0]
 
     def CalcForceLimitOutput(self, context, output):
         output.SetAtIndex(0, 15.0)

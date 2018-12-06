@@ -1,4 +1,5 @@
 from robot_plans import *
+from open_left_door_plans import OpenLeftDoorPlan
 
 #--------------------------------------------------------------------------------------------------
 #------------------------------------ open left door related constants       ----------------
@@ -27,9 +28,8 @@ theta0_hinge = np.arctan2(np.abs(p_handle_2_hinge[0]),
 
 #TODO: add a little noise to the orientation as well to show
 #      the controller's ability to adapt
-error = np.random.uniform(-.04, .04)
-error = 0
-print("ERROR")
+error = np.random.uniform(-.02, .02)
+
 print(error)
 p_EQ = GetEndEffectorWorldAlignedFrame().multiply(np.array([0., 0. + error, 0.095]))
 
@@ -42,46 +42,171 @@ p_ER = GetEndEffectorWorldAlignedFrame().multiply(np.array([0., 0. + error + .03
 # orientation of end effector aligned frame
 R_WEa_ref = RollPitchYaw(0, np.pi / 180 * 135, 0).ToRotationMatrix()
 
+def GetHandleFromWorld(angle):
+    X_WHr = Isometry3()
+    X_WHr.set_rotation(
+        RollPitchYaw(0, 0, angle).ToRotationMatrix().matrix())
+    X_WHr.set_translation(
+        p_WC_left_hinge +
+        [-r_handle * np.sin(angle) - .05,
+         -r_handle * np.cos(angle) + .02, 0])
+    #X_HrW = X_WHr.inverse()
+    return X_WHr
 
 class GraspObjectPlan(PlanBase):
     #TODO: Object width, max grip force?
-    def __init__(self, kinematics_plan, duration, max_force = 5, plan_type=None):
+    def __init__(self, kinematics_plan, duration=3.0, max_force = 5, plan_type=None):
         self.max_force = max_force
         self.plan = kinematics_plan
         t_knots = [i * duration/9 for i in range(10)]
-        self.path_knots = [self.plan.path_knots[-1] for i in range(10)]
-        traj = PiecewisePolynomial.Cubic(t_knots, path_knots.T,
+        self.path_knots = np.array([self.plan.path_knots[-1] for i in range(10)])
+        traj = PiecewisePolynomial.Cubic(t_knots, self.path_knots.T,
                                                np.zeros(3), np.zeros(3))
+        self.traj = traj
+
         #Command Gripper?
         PlanBase.__init__(self,
                           type=plan_type,
                           trajectory=traj)
         
-    def CalcKinematics(self, X_L7E, l7_frame, world_frame, tree_iiwa, context_iiwa, t_plan):
-        return self.plan.CalcKinematics(X_L7E, l7_frame, world_frame, tree_iiwa, context_iiwa, t_plan)
+    def CalcKinematics(self, l7_frame, world_frame, tree_iiwa, context_iiwa, t_plan):
+        self.plan.traj = self.traj
+        return self.plan.CalcKinematics(l7_frame, world_frame, tree_iiwa, context_iiwa, t_plan)
 
-class GraspObjectCompliancePlan(PlanBase):
-    def __init__(self, kinematics_plan, duration, max_force=5):
+class GraspObjectCompliancePlan(GraspObjectPlan):
+    def __init__(self, kinematics_plan, duration, max_force=.5):
         GraspObjectPlan.__init__(
+             self,
              kinematics_plan, 
              duration, 
              max_force,
-             plan_type = PlanTypes[7]
+             plan_type = PlanTypes["GraspObjectCompliancePlan"]
             )
         self.q_iiwa_previous = np.zeros(7)
+        self.past_grip_pt = 0.055
 
 
     def CalcPositionCommand(self, t_plan, q_iiwa, Jv_WL7q, p_HrQ, p_HrR, p_HrL, control_period, force=0):
         #Do same centering as in grabobjectplan with low gain
         #Add a higher-gain term for force
-        if t_plan < self.duration and abs(force) < self.max_force:
-            e = self.plan.GainCalculation(_)
-            e[4] -= abs(force) * .1 * e[4]/abs(e[4]) 
+        if t_plan < self.duration and self.past_grip_pt > .0125 and force < 1:
+            print("FORCE")
+            print(force)
+            grip_pt = max((self.duration - t_plan)/self.duration * 0.055, 0.012)
+
+            e = self.plan.GainCalculation(t_plan, p_HrQ, p_HrR, p_HrL)
+            if force < self.max_force:
+                e[4] -= abs(force) * .25 * e[4]/abs(e[4])  
+            print("PLAN")
+            print(e[4])
+
             result = np.linalg.lstsq(Jv_WL7q, e)
             q_dot_des = result[0]
             q_ref = q_iiwa + q_dot_des * control_period
 
             self.q_iiwa_previous[:] = q_iiwa
+            self.past_grip_pt = grip_pt
+
+            return q_ref, grip_pt
+        else:
+            print("FORCE")
+            print(force)
+            print("WIDTH")
+            print(self.past_grip_pt)
+            return self.q_iiwa_previous, self.past_grip_pt
+
+    def CalcTorqueCommand(self):
+        return np.zeros(7)
+
+#Opens the left door using the gripper force to shape its path
+#TODO:
+class OpenLeftDoorCompliancePlan(OpenLeftDoorPlan):
+    def __init__(self, angle_start, angle_end=np.pi/4, duration=10.0, type=None):
+        OpenLeftDoorPlan.__init__(
+            self,
+            angle_start=angle_start,
+            angle_end=angle_end,
+            duration=duration,
+            type=PlanTypes["OpenLeftDoorCompliancePlan"])
+        self.q_iiwa_previous = np.zeros(7)
+        self.max_force = 1
+
+    def CalcKinematics(self, l7_frame, world_frame, tree_iiwa, context_iiwa, t_plan):
+        p_L7Q = X_L7E.multiply(p_EQ)
+        p_L7R = X_L7E.multiply(p_ER)
+        p_L7L = X_L7E.multiply(p_EL)
+        Jv_WL7q = tree_iiwa.CalcFrameGeometricJacobianExpressedInWorld(
+            context=context_iiwa, frame_B=l7_frame,
+            p_BoFo_B=p_L7Q)
+
+        # Translation
+        # Hr: handle reference frame
+        # p_HrQ: position of point Q relative to frame Hr.
+        # X_WHr: transformation from Hr to world frame W.
+        X_WHr = Isometry3()
+        handle_angle_ref = self.traj.value(t_plan).flatten()
+        X_WHr.set_rotation(
+            RollPitchYaw(0, 0, 0).ToRotationMatrix().matrix())
+        X_WHr.set_translation(
+            p_WC_left_hinge +
+            [-r_handle * np.sin(handle_angle_ref),
+             -r_handle * np.cos(handle_angle_ref), 0])
+        X_HrW = X_WHr.inverse()
+
+        X_WL7 = tree_iiwa.CalcRelativeTransform(
+            context_iiwa, frame_A=world_frame,
+            frame_B=l7_frame)
+
+        p_WQ = X_WL7.multiply(p_L7Q)
+        p_WR = X_WL7.multiply(p_L7R)
+        p_WL = X_WL7.multiply(p_L7L)
+
+        p_HrQ = X_HrW.multiply(p_WQ)
+        p_HrR = X_HrW.multiply(p_WQ)
+        p_HrL = X_HrW.multiply(p_WQ)
+
+        return Jv_WL7q, p_HrQ, p_HrR, p_HrL
+
+
+    def GainCalculation(self, t_plan, p_HrQ, p_HrR, p_HrL, force=0):
+        g1 = (10 + (abs(force)-1) * .1)
+        g2 = (10 - (abs(force)-1) * .1)
+
+        gain = np.array([[g1[0], 0, 0],
+                         [0, g2[0], 0],
+                         [0, 0, 5]])
+        #angular gain should be:
+        # dif in z of fingers -> roll
+        # dif in y of fingers -> yaw
+        # pitch of fingers should move to ~pi/4
+        finger_dif = p_HrR - p_HrL
+        ang_gain = np.array( [[0, 0, 0],
+                             [0, 0, 1],
+                             [1, 0, 0]])
+        ang_e_des = np.matmul(finger_dif, ang_gain)
+        #ang_e_des[1] = ((p_HrR - p_HrQ)[2] -.02) * -3
+        e_des = np.matmul(p_HrQ, gain)
+        e = - np.hstack([ang_e_des, e_des])
+
+        print("FORCE")
+        print(force)
+
+        # if force > self.max_force:
+        #         #e[4] -= abs(force) * .1 * e[4]/abs(e[4])
+        #         e[3] += abs(force) * .2 * abs(e[3])/e[3]
+        return e
+
+    def CalcPositionCommand(self, t_plan, q_iiwa, Jv_WL7q, p_HrQ, p_HrR, p_HrL, control_period, force=0):
+        #Do same centering as in grabobjectplan with low gain
+        #Add a higher-gain term for force
+        if t_plan < self.duration :
+
+            e = self.GainCalculation(t_plan, p_HrQ, p_HrR, p_HrL, force)
+            result = np.linalg.lstsq(Jv_WL7q, e)
+            q_dot_des = result[0]
+            q_ref = q_iiwa + q_dot_des * control_period
+            self.q_iiwa_previous[:] = q_iiwa
+
             return q_ref
         else:
             return self.q_iiwa_previous
@@ -89,38 +214,23 @@ class GraspObjectCompliancePlan(PlanBase):
     def CalcTorqueCommand(self):
         return np.zeros(7)
 
-#TODO: Set up plan for grabbing handle using the modified controller
-class GrabHandlePlan(PlanBase):
-    def __init__(self):
-        pass
-
-    def CalcKinematics(self, X_L7E, l7_frame, world_frame, tree_iiwa, context_iiwa, t_plan):
-        pass
-
-#TODO:
-class GrabHandlePositionPlan(GrabHandlePlan):
-    def __init__(self):
-        pass
-
-    def CalcPositionCommand(self, t_plan, q_iiwa, Jv_WL7q, p_HrQ, p_HrR, p_HrL, control_period):
-        pass
-
 
 #TODO: Make more general?
 class GrabObjectPlan(PlanBase):
 
-    def __init__(self, p_WQ, p_WR, p_WL, X_WObj, duration=10.0, type=None):
-        t_knots = [0, duration]
+    def __init__(self, p_WQ, p_WR, p_WL, X_WObj, duration=20.0, type=None):
+        t_knots = [i * duration/9 for i in range(10)]
         self.obj_pos = X_WObj.translation()
         self.obj_rot = X_WObj.rotation()
         def InterpolateStraightLine(p_WQ_start, p_WQ_end, num_knot_points, i):
             return (p_WQ_end - p_WQ_start)/num_knot_points*(i+1) + p_WQ_start
-        self.path_knots = np.zeros((2,3))
-        self.path_knots[0] = InterpolateStraightLine(p_WQ, self.obj_pos, 2, 0)
-        self.path_knots[1] = InterpolateStraightLine(p_WQ, self.obj_pos, 2, 1)
-        
+        self.path_knots = np.zeros((10,3))
+
+        for i in range(len(self.path_knots)):
+            self.path_knots[i] = InterpolateStraightLine(p_WQ, self.obj_pos, len(self.path_knots), i)
         traj = PiecewisePolynomial.Cubic(t_knots, self.path_knots.T,
                                                np.zeros(3), np.zeros(3))
+        self.traj = traj
         PlanBase.__init__(self,
                           type=type,
                           trajectory=traj)
@@ -137,7 +247,7 @@ class GrabObjectPlan(PlanBase):
         X_WHr = Isometry3()
 
         #Translation: Object Position
-        X_WHr.set_translation(self.obj_pos)
+        X_WHr.set_translation(self.traj.value(t_plan).flatten())
         X_WHr.set_rotation(self.obj_rot)
         #RollPitchYaw(0,0, 0).ToRotationMatrix().matrix()
         #Orientation: Object Quat
@@ -152,8 +262,8 @@ class GrabObjectPlan(PlanBase):
         p_WL = X_WL7.multiply(p_L7L)
 
         p_HrQ = X_HrW.multiply(p_WQ)
-        p_HrR = X_HrW.multiply(p_WQ)
-        p_HrL = X_HrW.multiply(p_WQ)
+        p_HrR = X_HrW.multiply(p_WR)
+        p_HrL = X_HrW.multiply(p_WL)
 
         #TODO: return all three Hr relative values
         return Jv_WL7q, p_HrQ, p_HrR, p_HrL
@@ -172,20 +282,29 @@ class GrabObjectPositionPlan(GrabObjectPlan):
         self.q_iiwa_previous = np.zeros(7)
 
     def GainCalculation(self, t_plan, p_HrQ, p_HrR, p_HrL):
-        gain = np.array([[.4, 0, 0],
-                         [0, .1, 0],
-                         [0, 0, .11]])
+        for coord in range(len(p_HrQ)):
+            if abs(p_HrQ[coord]) < .0075 and coord != 1:
+                p_HrQ[coord] = 0
+        gain = np.array([[10, 0, 0],
+                         [0, 10, 0],
+                         [0, 0, 10]])
         #angular gain should be:
         # dif in z of fingers -> roll
         # dif in y of fingers -> yaw
         finger_dif = p_HrR - p_HrL
-        ang_gain = np.array( [[0, 0, 0],
-                             [0, 0, 1],
-                             [1, 0, 0]])
+        print("FINGER DIF")
+        print(finger_dif)
+        # for dif in range(len(finger_dif)):
+        #     if abs(finger_dif[dif]) < .0075:
+        #         finger_dif[dif] = 0
+        ang_gain = np.array( [[0, 0, -3],
+                             [0, 0, 0],
+                             [5, 0, 0]])
         ang_e_des = np.matmul(finger_dif, ang_gain)
-
+        ang_e_des[1] = ((p_HrQ - p_HrR)[2] - .02) * -1
         e_des = np.matmul(p_HrQ, gain)
         e = - np.hstack([ang_e_des, e_des])
+
         return e
 
 
