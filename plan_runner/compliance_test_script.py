@@ -17,7 +17,11 @@ ObjectPaths = {
     "small_brick" : "./plan_runner/thin_brick.sdf",
     "tall_box"    : "./plan_runner/tall_box.sdf",
     "long_tube"   : "./plan_runner/long_tube.sdf",
-    "small_ball"  : "./plan_runner/small_ball.sdf"
+    "small_ball"  : "./plan_runner/small_ball.sdf",
+    "apple" : "../pddl_planning/models/ycb_objects/apple.sdf", 
+    "soup_can" : "../pddl_planning/models/ycb_objects/soup_can.sdf",
+    "sugar_box": "../pddl_planning/models/ycb_objects/sugar_box.sdf",
+    "cracker_box" : "../pddl_planning/models/ycb_objects/cracker_box.sdf", 
 }
 
 #Minimum grasp width for each object
@@ -27,6 +31,10 @@ ObjectWidths = {
     "long_tube"   : .025,
     "small_ball"  : .029,
     "cabinet_handle" : .0,
+    "apple" : .29, 
+    "soup_can" : .012,
+    "sugar_box": .012,
+    "cracker_box" : .012, 
 }
 
 #The height at which to grasp the object
@@ -37,6 +45,10 @@ ObjectGraspHeights = {
     "tall_box"    : .145,
     "long_tube"   : .03,
     "small_ball"  : .03,
+    "apple" : .05, 
+    "soup_can" : .07,
+    "sugar_box": .13,
+    "cracker_box" : .15, 
 }
 
 #Q - the grasp point in the EE frame
@@ -208,13 +220,46 @@ def CabinetTest():
         manip_station_sim.RunSimulation(plan_list, gripper_setpoint_list,
                                     extra_time=2.0, real_time_rate=1.0, q0_kuka=q0)
 
+def NewObjectTest(obj_name):
+    rot = 0
+    q0 = [0, 0, 0, -1.75, 0, 1.0, 0]
+    X_WObject_small_brick = Isometry3.Identity()
+    X_WObject_small_brick.set_translation([.6, .1, ObjectGraspHeights['obj_name']])
+
+    manip_station_sim = ManipulationStationSimulator(
+        time_step=2e-3,
+        object_file_path=ObjectPaths['obj_name'],
+        object_base_link_name="base_link",
+        X_WObject = X_WObject_small_brick)
+    
+    plan_list = [GrabObjectPositionPlan(p_WQ_home, p_WR_home, p_WL_home, 
+                                           manip_station_sim.X_WObject, duration=6.0)]
+    plan_list.append(GraspObjectCompliancePlan(plan_list[0], 5.0, max_force=4, grasp_width=ObjectWidths['obj_name']))
+    
+    X_WLift = Isometry3.Identity()
+    X_WLift.set_translation([.6, .1, ObjectGraspHeights['obj_name'] + .1])
+
+    new_WQ = X_WObject_small_brick.translation() 
+    new_WR = X_WObject_small_brick.translation() + [.03 * np.cos(rot), .03 * np.sin(rot), -0.02]
+    new_WL = X_WObject_small_brick.translation() + [-.03 * np.cos(rot), -.03 * np.sin(rot), -0.02]
+
+    plan_list.append(GrabObjectPositionPlan(new_WQ, new_WR, new_WL, 
+                                           X_WLift, duration=4.0))
+
+    gripper_setpoint_list = [.055, 0.0, 0.0]
+
+    iiwa_position_command_log, iiwa_position_measured_log, iiwa_external_torque_log, \
+            plant_state_log = \
+        manip_station_sim.RunSimulation(plan_list, gripper_setpoint_list,
+                                    extra_time=2.0, real_time_rate=1.0, q0_kuka=q0)
 
 #Uncomment to test, one test at a time
 if __name__ == '__main__':
-    BrickGraspTest()
+    #BrickGraspTest()
     #BallGraspTest()
     #BoxGraspTest()
     #CabinetTest()
+    NewObjectTest("sugar_box")
 
     #Nonfunctioning:
     #TubeGraspTest()
