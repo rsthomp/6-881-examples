@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
 <sdf version='1.6'>
-<model name="tall_box">
+<model name="tube">
   <link name="base_link">
     <inertial>
-      <pose frame=''>0 0 0 0 0 0 </pose>
-      <mass>0.098</mass>
+      <pose>0 0 0 0 3.14/2 0 </pose>
+      <mass>0.028</mass>
         <inertia>
           <ixx>1.17e-5</ixx>
           <ixy>0</ixy>
@@ -15,11 +15,11 @@
         </inertia>
     </inertial>
     <visual name='base_link'>
-      <pose frame=''>0 0 0 0 0 0</pose>
+      <pose >0 0 0 0 3.14/2 3.14/2</pose>
       <geometry>
-        <box> 
-          <size>0.13 0.022 0.18</size>
-        </box>
+        <sphere>
+          <radius> 0.03</radius> 
+        </sphere>
       </geometry>
       <material>
         <diffuse>0.31 0.01 0.13 1.0</diffuse>
@@ -38,19 +38,18 @@
       case a deviation of 0.0005 m from the visual surface).
      -->
     <collision name='box_collision'>
-      <pose>0 0 0 0 0 0</pose>
+      <pose>0 0 0 0 3.14/2 3.14/2</pose>
       <geometry>
-        <box> 
-          <size>0.12 0.021 0.17</size>
-        </box>
+        <sphere>
+          <radius> 0.03</radius> 
+        </sphere>
       </geometry>
       <material>
         <diffuse>0 1 0 1.0</diffuse>
       </material>
     </collision>
 
-    
-
+   
    </link>
 </model>
 </sdf>

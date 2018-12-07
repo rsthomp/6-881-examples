@@ -140,6 +140,8 @@ class ManipStationPlanRunner(LeafSystem):
         #For moving the EE to an object to grasp
         elif self.current_plan.type == PlanTypes["GrabObjectPositionPlan"]:
 
+            print("GRIP FORCE")
+            print(force)
             x_iiwa_mutable = \
                 self.tree_iiwa.GetMutablePositionsAndVelocities(self.context_iiwa)
             x_iiwa_mutable[:7] = q_iiwa
