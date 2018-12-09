@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <sdf version='1.6'>
 <model name="gelatin_box">
-  <link name="base_link_gelatin">
+  <link name="base_link">
     <inertial>
       <pose frame=''>0 0 0.0365 0 0 0</pose>
       <mass>0.097</mass>
@@ -18,7 +18,7 @@
       <pose frame=''>0 0 0.0365 0 0 0</pose>
       <geometry>
         <box>
-          <size>0.028 0.085 0.073</size>
+          <size> 0.085 0.028 0.073</size>
         </box>
       </geometry>
       <material>
@@ -41,7 +41,7 @@
       <pose>0 0 0.0365 0 0 0</pose>
       <geometry>
         <box> 
-          <size>0.027 0.084 0.072</size>
+          <size> 0.084 0.027 0.072</size>
         </box>
       </geometry>
       <material>
@@ -49,62 +49,7 @@
       </material>
     </collision>
 
-    <collision name='point_collision1'>
-      <pose>0.014 0.0425 0 0 0 0</pose>
-      <geometry>
-        <sphere><radius>1e-7</radius></sphere>
-      </geometry>
-    </collision>
-
-    <collision name='point_collision2'>
-      <pose>0.014 -0.0425 0 0 0 0</pose>
-      <geometry>
-        <sphere><radius>1e-7</radius></sphere>
-      </geometry>
-    </collision>
-
-    <collision name='point_collision3'>
-      <pose>-0.014 0.0425 0 0 0 0</pose>
-      <geometry>
-        <sphere><radius>1e-7</radius></sphere>
-      </geometry>
-    </collision>
-
-    <collision name='point_collision4'>
-      <pose>-0.014 -0.0425 0 0 0 0</pose>
-      <geometry>
-        <sphere><radius>1e-7</radius></sphere>
-      </geometry>
-    </collision>
-
-    <collision name='point_collision5'>
-      <pose>0.014 0.0425 0.073 0 0 0</pose>
-      <geometry>
-        <sphere><radius>1e-7</radius></sphere>
-      </geometry>
-    </collision>
-
-    <collision name='point_collision6'>
-      <pose>0.014 -0.0425 0.073 0 0 0</pose>
-      <geometry>
-        <sphere><radius>1e-7</radius></sphere>
-      </geometry>
-    </collision>
-
-    <collision name='point_collision7'>
-      <pose>-0.014 0.0425 0.073 0 0 0</pose>
-      <geometry>
-        <sphere><radius>1e-7</radius></sphere>
-      </geometry>
-    </collision>
-
-    <collision name='point_collision8'>
-      <pose>-0.014 -0.0425 0.073 0 0 0</pose>
-      <geometry>
-        <sphere><radius>1e-7</radius></sphere>
-      </geometry>
-    </collision>
-
+    
    </link>
 </model>
 </sdf>

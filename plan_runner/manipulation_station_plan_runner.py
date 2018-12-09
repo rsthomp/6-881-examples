@@ -111,7 +111,7 @@ class ManipStationPlanRunner(LeafSystem):
             self._DeclareVectorOutputPort(
                 "force_limit", BasicVector(1), self.CalcForceLimitOutput)
 
-        self.gripper_pos = .055
+        self.gripper_pos = .1
 
     def _DoHasDirectFeedthrough(self, input_port, output_port):
         return False
@@ -139,22 +139,20 @@ class ManipStationPlanRunner(LeafSystem):
 
         #For moving the EE to an object to grasp
         elif self.current_plan.type == PlanTypes["GrabObjectPositionPlan"]:
-
-            print("GRIP FORCE")
-            print(force)
+            
             x_iiwa_mutable = \
                 self.tree_iiwa.GetMutablePositionsAndVelocities(self.context_iiwa)
             x_iiwa_mutable[:7] = q_iiwa
 
             #Get position relative to reference frame
-            Jv_WL7q, p_HrQ, p_HrR, p_HrL = self.current_plan.CalcKinematics(
+            Jv_WL7q, p_ObjQ = self.current_plan.CalcKinematics(
                 l7_frame=self.l7_frame,
                 world_frame=self.plant_iiwa.world_frame(),
                 tree_iiwa=self.tree_iiwa, context_iiwa=self.context_iiwa,
                 t_plan=t_plan)
 
             new_position_command[:] = self.current_plan.CalcPositionCommand(
-                    t_plan, q_iiwa, Jv_WL7q, p_HrQ, p_HrR, p_HrL, self.control_period)
+                    t_plan, q_iiwa, p_ObjQ, self.control_period)
             new_torque_command[:] = self.current_plan.CalcTorqueCommand()
 
         #For grabbing objects
@@ -165,14 +163,14 @@ class ManipStationPlanRunner(LeafSystem):
             x_iiwa_mutable[:7] = q_iiwa
 
             #Get position relative to reference frame
-            Jv_WL7q, p_HrQ, p_HrR, p_HrL = self.current_plan.CalcKinematics(
+            Jv_WL7q, p_ObjQ = self.current_plan.CalcKinematics(
                 l7_frame=self.l7_frame,
                 world_frame=self.plant_iiwa.world_frame(),
                 tree_iiwa=self.tree_iiwa, context_iiwa=self.context_iiwa,
                 t_plan=t_plan)
 
             new_position_command[:], self.gripper_pos = self.current_plan.CalcPositionCommand(
-                    t_plan, q_iiwa, Jv_WL7q, p_HrQ, p_HrR, p_HrL, self.control_period, force)
+                    t_plan, q_iiwa, p_ObjQ, self.control_period, force)
             new_torque_command[:] = self.current_plan.CalcTorqueCommand()
 
         elif self.current_plan.type == PlanTypes["OpenLeftDoorCompliancePlan"]:
@@ -181,14 +179,14 @@ class ManipStationPlanRunner(LeafSystem):
             x_iiwa_mutable[:7] = q_iiwa
 
             #Get position relative to reference frame
-            Jv_WL7q, p_HrQ, p_HrR, p_HrL = self.current_plan.CalcKinematics(
+            Jv_WL7q, p_HrQ = self.current_plan.CalcKinematics(
                 l7_frame=self.l7_frame,
                 world_frame=self.plant_iiwa.world_frame(),
                 tree_iiwa=self.tree_iiwa, context_iiwa=self.context_iiwa,
                 t_plan=t_plan)
 
             new_position_command[:] = self.current_plan.CalcPositionCommand(
-                    t_plan, q_iiwa, Jv_WL7q, p_HrQ, p_HrR, p_HrL, self.control_period, force)
+                    t_plan, q_iiwa, Jv_WL7q, p_HrQ, self.control_period, force)
             new_torque_command[:] = self.current_plan.CalcTorqueCommand()
 
 

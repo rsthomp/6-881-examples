@@ -165,6 +165,8 @@ class IiwaTaskSpacePlan(PlanBase):
             # position and orientation errors.
             p_WQ = X_WL7.multiply(self.p_L7Q)
             err_xyz = self.CalcXyzReference(t_plan) - p_WQ
+
+
             Q_WL7 = X_WL7.quaternion()
             Q_L7L7r = Q_WL7.inverse().multiply(self.Q_WL7_ref)
 
