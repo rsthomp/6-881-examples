@@ -151,7 +151,7 @@ class GraspObjectCompliancePlan(GraspObjectPlan):
             if force < self.max_force and force > .005:
                 v_ee_desired[4] -= abs(force) * .25\
                                    * v_ee_desired[4]/abs(v_ee_desired[4])  
-            #print(v_ee_desired[4])
+
             result = np.linalg.lstsq(self.Jv_WL7q, v_ee_desired)
             q_dot_des = np.clip(result[0], -2, 2)
             q_ref = q_iiwa + q_dot_des * control_period
@@ -189,7 +189,6 @@ class ReleaseObjectCompliancePlan(GraspObjectPlan):
 
     def CalcPositionCommand(self, t_plan, q_iiwa, p_ObjQ, control_period, force=0):
         #Freezes the arm at a max duration and above a max force
-        print(force)
         if t_plan < self.duration  and force < 1:
             self.flag = True
 

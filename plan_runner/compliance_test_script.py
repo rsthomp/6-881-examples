@@ -120,7 +120,7 @@ def CabinetTest():
                                     extra_time=2.0, real_time_rate=1.0, q0_kuka=q0)
 
 def NewObjectTest(obj_name):
-    rot = np.pi/4
+    rot = 0
     q0 = [0, 0, 0, -1.75, 0, 1.0, 0]
     X_WObject = Isometry3.Identity()
     X_WObject.set_translation([.6, .1, ObjectGraspHeights[obj_name]])
@@ -136,8 +136,17 @@ def NewObjectTest(obj_name):
     X_ObjEr.set_rotation(RollPitchYaw(0, 5 * np.pi/8, 0).ToRotationMatrix().matrix())
     X_WEr = X_WObject.multiply(X_ObjEr)
 
+    
+    plant_iiwa = station.get_controller_plant()
+    tree_iiwa = plant_iiwa.tree()
+    context_iiwa = plant_iiwa.CreateDefaultContext()
+    l7_frame = plant_iiwa.GetFrameByName('iiwa_link_7')
+    X_WL7 = tree_iiwa.CalcRelativeTransform(
+            context_iiwa, frame_A=world_frame,
+            frame_B=l7_frame)
+
     #Interpolates between two orientations
-    def ReturnSLERPedOrientation(i, num_knot_points, start=R_WEa_ref, end=X_WEr.rotation()):
+    def ReturnSLERPedOrientation(i, num_knot_points, start=X_WL7, end=X_WEr.rotation()):
         Q_WEr = PyQuat(matrix=RotationMatrix(end).matrix())
         Q_WE = PyQuat(matrix=R_WEa_ref.matrix())
         Q = PyQuat.slerp(Q_WE, Q_WEr, amount=i/float(num_knot_points))
@@ -152,10 +161,8 @@ def NewObjectTest(obj_name):
 
     plan_list, gripper_setpoint_list, q_final_full = GenerateJointSpacePlan(ReturnSLERPedOrientation, 
                                                                   X_WObject.translation())
-    #plan_list.append(GrabObjectPositionPlan(X_WObject_small_brick.translation() + [0,0,.2], X_WObject_small_brick))
-    plan_list.append(GraspObjectCompliancePlan(X_WObject, 5.0, max_force=4, grasp_width=ObjectWidths[obj_name], max_grip=.1))
 
-    #Supposedly relative to gripper position??
+    plan_list.append(GraspObjectCompliancePlan(X_WObject, 5.0, max_force=4, grasp_width=ObjectWidths[obj_name], max_grip=.1))
 
     plan_2, _, q_2 = GenerateJointSpacePlan(ReturnConstantOrientation, 
                      X_WObject.translation() + [0,0,.2], start=X_WObject.translation(),
