@@ -213,7 +213,7 @@ class ReleaseObjectCompliancePlan(GraspObjectPlan):
             v_ee_desired[0:3] = Q_WL7.multiply(kp_rotation * Q_L7L7r.xyz())
 
             #Centers the gripper based on forces felt in the fingers
-            if force < self.max_force and force > .007:
+            if force < self.max_force and force > .01:
                 v_ee_desired[4] -= abs(force) * .25\
                                    * v_ee_desired[4]/abs(v_ee_desired[4])  
             result = np.linalg.lstsq(self.Jv_WL7q, v_ee_desired)

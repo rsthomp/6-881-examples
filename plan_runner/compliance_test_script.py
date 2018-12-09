@@ -72,7 +72,7 @@ def GenerateJointSpacePlan(InterpolateOrientation, goal, start=p_WQ_home, q_full
 
     # move to grasp left door handle
     q_traj, q_knots_full = InverseKinPointwise(
-        start, goal, duration=5.0,
+        start, goal, duration=10.0,
         num_knot_points=num_knot_points, q_initial_guess=q_home_full,
         InterpolatePosition=InterpolateStraightLine,
         InterpolateOrientation=InterpolateOrientation,
